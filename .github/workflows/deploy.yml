@@ -1,0 +1,36 @@
+name: Deploy tag to WordPress.org
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'
+      - '[0-9]+.[0-9]+'
+
+concurrency:
+  group: wporg-svn
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag, plugin Version header and readme Stable tag match
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          HEADER=$(grep -m1 -iE '^[[:space:]*]*Version:' eebme_shorturl.php | sed -E 's/^[^:]*:[[:space:]]*//' | tr -d '\r' | xargs)
+          STABLE=$(grep -m1 -iE '^Stable tag:' readme.txt | sed -E 's/^[^:]*:[[:space:]]*//' | tr -d '\r' | xargs)
+          echo "tag=$TAG header=$HEADER stable=$STABLE"
+          if [ "$TAG" != "$HEADER" ] || [ "$TAG" != "$STABLE" ]; then
+            echo "::error::Tag ($TAG), Version header ($HEADER) and Stable tag ($STABLE) must all match."
+            exit 1
+          fi
+
+      - name: Deploy to WordPress.org
+        uses: 10up/action-wordpress-plugin-deploy@stable
+        env:
+          SLUG: wp-url-shorten
+          VERSION: ${{ github.ref_name }}
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
